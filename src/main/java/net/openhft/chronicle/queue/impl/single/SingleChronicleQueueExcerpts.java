@@ -1978,7 +1978,10 @@ public class SingleChronicleQueueExcerpts {
                     final long index, final TailerState state, final TailerDirection direction,
                     final SingleChronicleQueue queue, final Wire wire) {
 
-                return ((wire == null) || wire.bytes().readPosition() == readPositionAtLastMove) &&
+                return
+                        /*((wire == null) || wire.bytes().readPosition() == readPositionAtLastMove) &&*/
+
+
                         index == this.lastMovedToIndex && index != 0 && state == FOUND_CYCLE &&
                         direction == directionAtLastMoveTo &&
                         queue.rollCycle().toCycle(index) == queue.rollCycle().toCycle(lastMovedToIndex);
