@@ -45,7 +45,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.*;
 
 import static net.openhft.chronicle.queue.TailerDirection.NONE;
@@ -693,20 +692,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
         }
     }
 
-    private static final class CachedCycleTree {
-        private final long directoryModCount;
-        private final NavigableMap<Long, File> cachedCycleTree;
-
-        CachedCycleTree(final long directoryModCount, final NavigableMap<Long, File> cachedCycleTree) {
-            this.directoryModCount = directoryModCount;
-            this.cachedCycleTree = cachedCycleTree;
-        }
-    }
-
     private class StoreSupplier implements WireStoreSupplier {
-        private boolean queuePathExists;
-        private final AtomicReference<CachedCycleTree> cachedTree = new AtomicReference<>();
-
         @Override
         public WireStore acquire(int cycle, boolean createIfAbsent) {
 
@@ -716,27 +702,24 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
             try {
                 File path = dateValue.path;
 
-                if ((cycle > directoryListing.getMaxCreatedCycle() ||
-                        !path.exists()) &&
-                        !createIfAbsent) {
+                // TODO use the DirectoryListing file to check for the file existence.
+                if (!path.exists() && !createIfAbsent)
                     return null;
-                }
 
                 final File parentFile = dateValue.parentPath;
 
                 if (createIfAbsent)
                     checkDiskSpace(that.path);
 
-                if (createIfAbsent && !path.exists() && pool.isEmpty()) {
+                if (createIfAbsent && !path.exists()) {
                     parentFile.mkdirs();
+                    directoryListing.onFileCreated(path, cycle);
                     // before we create a new file, we need to ensure previous file has got EOF mark
                     // but only if we are not in the process of normal rolling
                     QueueFiles.writeEOFIfNeeded(path.toPath(), wireType(), blockSize(), timeoutMS);
                 }
 
                 final MappedBytes mappedBytes = mappedBytes(path);
-                directoryListing.onFileCreated(path, cycle);
-                queuePathExists = true;
                 AbstractWire wire = (AbstractWire) wireType.apply(mappedBytes);
                 assert wire.startUse();
                 wire.pauser(pauserSupplier.get());
@@ -787,44 +770,23 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
          * @throws ParseException
          */
         @NotNull
-        private NavigableMap<Long, File> cycleTree(final boolean force) {
+        private NavigableMap<Long, File> cycleTree() {
 
             final File parentFile = path;
 
-            // use pre-calculated result in case where queue dir existed when StoreSupplier was constructed
-            if (!queuePathExists && !parentFile.exists())
+            if (!parentFile.exists())
                 throw new IllegalStateException("parentFile=" + parentFile.getName() + " does not exist");
 
+            final RollingResourcesCache dateCache = SingleChronicleQueue.this.dateCache;
+            final NavigableMap<Long, File> tree = new TreeMap<>();
 
-            CachedCycleTree cachedValue = cachedTree.get();
-            final long directoryModCount = directoryListing.modCount();
-            if (force || (cachedValue == null || directoryModCount > cachedValue.directoryModCount)) {
+            final File[] files = parentFile.listFiles((File file) -> file.getPath().endsWith(SUFFIX));
 
-                final RollingResourcesCache dateCache = SingleChronicleQueue.this.dateCache;
-                final NavigableMap<Long, File> tree = new TreeMap<>();
-
-                final File[] files = parentFile.listFiles((File file) -> file.getPath().endsWith(SUFFIX));
-
-                for (File file : files) {
-                    tree.put(dateCache.toLong(file), file);
-                }
-
-                cachedValue = new CachedCycleTree(directoryModCount, tree);
-
-                while (true) {
-                    final CachedCycleTree existing = cachedTree.get();
-
-                    if (existing != null && existing.directoryModCount > cachedValue.directoryModCount) {
-                        break;
-                    }
-
-                    if (cachedTree.compareAndSet(existing, cachedValue)) {
-                        break;
-                    }
-                }
+            for (File file : files) {
+                tree.put(dateCache.toLong(file), file);
             }
 
-            return cachedValue.cachedCycleTree;
+            return tree;
         }
 
         @Override
@@ -833,11 +795,10 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
             if (direction == NONE)
                 throw new AssertionError("direction is NONE");
             assert currentCycle >= 0 : "currentCycle=" + Integer.toHexString(currentCycle);
-            NavigableMap<Long, File> tree = cycleTree(false);
+            final NavigableMap<Long, File> tree = cycleTree();
             final File currentCycleFile = dateCache.resourceFor(currentCycle).path;
 
-            if (currentCycle > directoryListing.getMaxCreatedCycle() ||
-                    currentCycle < directoryListing.getMinCreatedCycle()) {
+            if (!currentCycleFile.exists()) {
                 boolean fileFound = false;
                 for (int i = 0; i < 20; i++) {
                     Jvm.pause(10);
@@ -861,14 +822,8 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
 
             Long key = dateCache.toLong(currentCycleFile);
             File file = tree.get(key);
-            // already checked that the file should be on-disk, so if it is null, call cycleTree again with force
-            if (file == null) {
-                tree = cycleTree(true);
-                file = tree.get(key);
-            }
-            if (file == null) {
+            if (file == null)
                 throw new AssertionError("missing currentCycle, file=" + currentCycleFile);
-            }
 
             switch (direction) {
                 case FORWARD:
@@ -890,7 +845,7 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
          */
         @Override
         public NavigableSet<Long> cycles(int lowerCycle, int upperCycle) throws ParseException {
-            final NavigableMap<Long, File> tree = cycleTree(false);
+            final NavigableMap<Long, File> tree = cycleTree();
             final Long lowerKey = toKey(lowerCycle, "lowerCycle");
             final Long upperKey = toKey(upperCycle, "upperCycle");
             assert lowerKey != null;
