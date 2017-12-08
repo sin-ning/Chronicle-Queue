@@ -10,7 +10,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
@@ -21,8 +23,9 @@ import static org.junit.Assert.assertTrue;
 public class RollCycleMultiThreadStressTest {
     private static final Logger LOG = LoggerFactory.getLogger(RollCycleMultiThreadStressTest.class);
     private static final long SLEEP_PER_WRITE_NANOS = Long.getLong("writeLatency", 10_000);
+    private static final int NUMBER_OF_INTS = 18;//1060 / 4;
 
-    @Ignore("long running")
+    @Ignore
     @Test
     public void stress() throws Exception {
         final File path = DirectoryUtils.tempDir("rollCycleStress");
@@ -73,6 +76,7 @@ public class RollCycleMultiThreadStressTest {
                 wrote.get() >= expectedNumberOfMessages);
 
         final long giveUpReadingAt = System.currentTimeMillis() + 60_000L;
+        long stackDumpAt = giveUpReadingAt - 15_000L;
         while (System.currentTimeMillis() < giveUpReadingAt) {
             boolean allReadersComplete = areAllReadersComplete(expectedNumberOfMessages, readers);
 
@@ -80,8 +84,15 @@ public class RollCycleMultiThreadStressTest {
                 break;
             }
 
-            System.out.printf("Not all readers are complete. Waiting...%n");
-            LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(10L));
+            if (stackDumpAt < System.currentTimeMillis()) {
+                Thread.getAllStackTraces().forEach((n, st) -> {
+                    System.out.println("\n---------------------------\n" + n + "\n\n");
+                    Arrays.stream(st).forEach(System.out::println);
+                });
+            }
+
+//            System.out.printf("Not all readers are complete. Waiting...%n");
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(500L));
         }
         assertTrue("Readers did not catch up",
                 areAllReadersComplete(expectedNumberOfMessages, readers));
@@ -106,10 +117,12 @@ public class RollCycleMultiThreadStressTest {
     private boolean areAllReadersComplete(final int expectedNumberOfMessages, final List<Reader> readers) {
         boolean allReadersComplete = true;
 
+        int count=0;
         for (Reader reader : readers) {
+            ++count;
             if (reader.lastRead < expectedNumberOfMessages - 1) {
                 allReadersComplete = false;
-                System.out.printf("Reader last read: %d%n", reader.lastRead);
+//                System.out.printf("Reader #%d last read: %d%n", count, reader.lastRead);
             }
         }
         return allReadersComplete;
@@ -138,9 +151,11 @@ public class RollCycleMultiThreadStressTest {
                 while (lastRead != expectedNumberOfMessages - 1) {
                     try (DocumentContext rd = tailer.readingDocument()) {
                         if (rd.isPresent()) {
-                            int v = rd.wire().getValueIn().int32();
-
-                            assertEquals(lastRead + 1, v);
+                            int v = -1;
+                            for (int i = 0; i< NUMBER_OF_INTS; i++) {
+                                v = rd.wire().getValueIn().int32();
+                                assertEquals(lastRead + 1, v);
+                            }
                             lastRead = v;
                         }
                     }
@@ -181,8 +196,10 @@ public class RollCycleMultiThreadStressTest {
                     try (DocumentContext writingDocument = appender.writingDocument()) {
                         value = wrote.getAndIncrement();
                         ValueOut valueOut = writingDocument.wire().getValueOut();
-                        valueOut.int32(value);
-                        writingDocument.wire().addPadding(60); // make the message longer
+                        // make the message longer
+                        for (int i = 0; i< NUMBER_OF_INTS; i++) {
+                            valueOut.int32(value);
+                        }
                         long delay = nextTime - System.nanoTime();
                         if (delay > 0) {
                             LockSupport.parkNanos(delay);
