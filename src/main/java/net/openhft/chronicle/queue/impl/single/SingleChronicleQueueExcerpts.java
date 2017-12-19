@@ -814,7 +814,18 @@ public class SingleChronicleQueueExcerpts {
                         if (padToCacheAlign)
                             wire.padToCacheAlign();
 
-                        wire.updateHeader(position, metaData);
+                        boolean updatedHeader = false;
+                        for (int i = 0; i < REPEAT_WHILE_ROLLING; i++) {
+                            try {
+                                wire.updateHeader(position, metaData);
+                                updatedHeader = true;
+                                break;
+                            } catch (EOFException theySeeMeRolling) {
+                                cycle = handleRoll(cycle);
+                            }
+                        }
+                        if (! updatedHeader)
+                            throw new IllegalStateException("Unable to roll to the current cycle");
 
                         lastPosition = position;
                         lastCycle = cycle;

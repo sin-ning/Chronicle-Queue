@@ -38,7 +38,6 @@ import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BiFunction;
 import java.util.stream.Stream;
@@ -162,12 +161,8 @@ enum QueueFiles {
                         final int existingValue = bytes.readVolatileInt(eofOffset);
                         if (0 == existingValue) {
                             // no EOF found - write EOF
-                            try {
-                                bytes.writePosition(eofOffset);
-                                w.writeEndOfWire(timeoutMS, TimeUnit.MILLISECONDS, eofOffset);
-                            } catch (TimeoutException e) {
-                                Jvm.warn().on(RollCycleRetriever.class, "Timeout writing EOF for last file in " + queuePath);
-                            }
+                            bytes.writePosition(eofOffset);
+                            w.writeEndOfWire(timeoutMS, TimeUnit.MILLISECONDS, eofOffset);
                         }
                         return null;
                     }));
