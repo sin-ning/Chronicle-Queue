@@ -26,7 +26,7 @@ public final class FileCreatorMain {
                 final int cycle = queue.cycle();
                 final int nextCycle = cycle + 1;
 
-                final File file = queue.storeForCycle(nextCycle, queue.epoch(), false).file();
+                final File file = queue.storeForCycle(nextCycle, queue.epoch(), true).file();
                 if (!file.exists()) {
                     System.out.printf("Creating file %s%n", file.getAbsolutePath());
                     try(final RandomAccessFile rw = new RandomAccessFile(file, "rw")) {
