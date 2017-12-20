@@ -24,15 +24,18 @@ public final class FileCreatorMain {
                 LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(1));
 
                 final int cycle = queue.cycle();
-                final int nextCycle = cycle + 1;
 
-                final File file = queue.storeForCycle(nextCycle, queue.epoch(), true).file();
-                if (!file.exists()) {
-                    System.out.printf("Creating file %s%n", file.getAbsolutePath());
-                    try(final RandomAccessFile rw = new RandomAccessFile(file, "rw")) {
-                        rw.setLength(1024 * 1024 * 2);
-                    } catch (IOException e) {
-                        System.err.println("Failed to pre-create file: " + e.getMessage());
+                final File file = queue.storeForCycle(cycle, queue.epoch(), false).file();
+                if (file != null) {
+                    final String[] tokens = file.getName().substring(0, file.getName().indexOf('.')).split("-");
+                    final File nextCycleFile = new File(file.getParent(), tokens[0] + "-" + (Integer.parseInt(tokens[1]) + 1));
+                    if (!nextCycleFile.exists()) {
+                        System.out.printf("Creating file %s%n", nextCycleFile.getAbsolutePath());
+                        try (final RandomAccessFile rw = new RandomAccessFile(nextCycleFile, "rw")) {
+                            rw.setLength(1024 * 1024 * 2);
+                        } catch (IOException e) {
+                            System.err.println("Failed to pre-create file: " + e.getMessage());
+                        }
                     }
                 }
             }
