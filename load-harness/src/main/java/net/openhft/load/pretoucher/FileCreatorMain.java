@@ -7,6 +7,8 @@ import net.openhft.load.QueueFactory;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.concurrent.ExecutorService;
@@ -34,8 +36,18 @@ public final class FileCreatorMain {
                         final File nextCycleFile = new File(file.getParent(), tokens[0] + "-" + (Integer.parseInt(tokens[1]) + 1) + ".cq4");
                         if (!nextCycleFile.exists()) {
                             System.out.printf("Creating file %s%n", nextCycleFile.getAbsolutePath());
-                            try (final RandomAccessFile rw = new RandomAccessFile(nextCycleFile, "rw")) {
-                                rw.setLength(1024 * 1024 * 2);
+                            try (final RandomAccessFile rw = new RandomAccessFile(nextCycleFile, "rw");
+                                 final FileChannel channel = rw.getChannel()) {
+
+
+                                final int length = 1024 * 1024 * 2;
+                                rw.setLength(length);
+                                final ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
+                                for (int i = 0; i < length; i += 1024) {
+                                    buffer.clear();
+                                    channel.read(buffer);
+                                }
+
                             } catch (IOException e) {
                                 System.err.println("Failed to pre-create file: " + e.getMessage());
                             }
