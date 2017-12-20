@@ -28,7 +28,7 @@ public final class FileCreatorMain {
                 final File file = queue.storeForCycle(cycle, queue.epoch(), false).file();
                 if (file != null) {
                     final String[] tokens = file.getName().substring(0, file.getName().indexOf('.')).split("-");
-                    final File nextCycleFile = new File(file.getParent(), tokens[0] + "-" + (Integer.parseInt(tokens[1]) + 1));
+                    final File nextCycleFile = new File(file.getParent(), tokens[0] + "-" + (Integer.parseInt(tokens[1]) + 1) + ".cq4");
                     if (!nextCycleFile.exists()) {
                         System.out.printf("Creating file %s%n", nextCycleFile.getAbsolutePath());
                         try (final RandomAccessFile rw = new RandomAccessFile(nextCycleFile, "rw")) {
