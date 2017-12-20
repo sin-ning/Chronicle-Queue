@@ -3,7 +3,6 @@ package net.openhft.load;
 import net.openhft.chronicle.bytes.MethodReader;
 import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
-import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
 import net.openhft.load.config.ConfigParser;
 import net.openhft.load.config.StageConfig;
 import net.openhft.load.messages.EightyByteMessage;
@@ -34,9 +33,9 @@ public final class PublishDeltaGenerator {
                 get(allStageConfigs.size() - 1);
         try (
                 final SingleChronicleQueue pubQueue =
-                        SingleChronicleQueueBuilder.binary(configParser.getPublisherConfig().outputDir()).build();
+                        QueueFactory.builderFor(configParser.getPublisherConfig().outputDir()).build();
                 final SingleChronicleQueue queue =
-                     SingleChronicleQueueBuilder.binary(lastStageConfig.getOutputPath()).build();
+                        QueueFactory.builderFor(lastStageConfig.getOutputPath()).build();
              final Writer resultsWriter = new FileWriter("publish-deltas.txt", false);
              final Writer s0Pub = new FileWriter("s0-deltas.txt", false);
              final Writer s1Pub = new FileWriter("s1-deltas.txt", false);

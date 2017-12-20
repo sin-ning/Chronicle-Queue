@@ -1,16 +1,15 @@
 package net.openhft.load;
 
 import net.openhft.chronicle.bytes.MethodReader;
-import net.openhft.chronicle.queue.RollCycles;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
 import net.openhft.load.config.ConfigParser;
 import net.openhft.load.config.StageConfig;
+import net.openhft.load.pretoucher.PretoucherMain;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.time.ZoneId;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -27,8 +26,7 @@ public final class StageMain {
 
         final StageConfig stageConfig = configParser.getStageConfig(Integer.parseInt(args[1]));
         final ExecutorService service = Executors.newFixedThreadPool(stageConfig.getStageIndices().size() + 1);
-        service.submit(new PretoucherTask(outputQueue(stageConfig.getOutputPath(), UNSET_SOURCE),
-                configParser.getPretouchIntervalMillis()));
+        startPretoucher(configParser, stageConfig, service);
 
         for (Integer index : stageConfig.getStageIndices()) {
             service.submit(() -> {
@@ -53,6 +51,15 @@ public final class StageMain {
         }
     }
 
+    private static void startPretoucher(final ConfigParser configParser, final StageConfig stageConfig, final ExecutorService service) {
+        if (configParser.isPretouchOutOfBand()) {
+            PretoucherMain.startOutOfBandPretoucher(stageConfig.getOutputPath(), service);
+        } else {
+            service.submit(new PretoucherTask(outputQueue(stageConfig.getOutputPath(), UNSET_SOURCE),
+                    configParser.getPretouchIntervalMillis()));
+        }
+    }
+
     private static MethodReader createReader(final Path path, final MethodDefinition impl) {
         final SingleChronicleQueue queue = outputQueue(path, UNSET_SOURCE);
         return queue.createTailer().methodReader(impl);
@@ -65,11 +72,10 @@ public final class StageMain {
 
     @NotNull
     private static SingleChronicleQueue outputQueue(final Path path, final int index) {
-        final SingleChronicleQueueBuilder builder = SingleChronicleQueueBuilder.binary(path);
-        builder.rollTime(RollTimeCalculator.getNextRollWindow(), ZoneId.of("UTC"));
+        final SingleChronicleQueueBuilder builder = QueueFactory.builderFor(path);
         if (index != UNSET_SOURCE) {
             builder.sourceId(index);
         }
-        return builder.rollCycle(RollCycles.HOURLY).build();
+        return builder.build();
     }
 }

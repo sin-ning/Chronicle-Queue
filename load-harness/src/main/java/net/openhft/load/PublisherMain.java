@@ -1,16 +1,14 @@
 package net.openhft.load;
 
 import net.openhft.chronicle.queue.ExcerptAppender;
-import net.openhft.chronicle.queue.RollCycles;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
-import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
 import net.openhft.load.config.ConfigParser;
 import net.openhft.load.config.PublisherConfig;
+import net.openhft.load.pretoucher.PretoucherMain;
 import org.jetbrains.annotations.NotNull;
 
 import java.nio.file.Path;
 import java.time.Instant;
-import java.time.ZoneId;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -25,9 +23,8 @@ public final class PublisherMain {
 
         final PublisherConfig publisherConfig = configParser.getPublisherConfig();
         final ExecutorService executorService = Executors.newFixedThreadPool(2);
-        executorService.submit(
-                new PretoucherTask(outputQueue(publisherConfig.outputDir()),
-                        configParser.getPretouchIntervalMillis()));
+
+        startPretoucher(configParser, publisherConfig, executorService);
 
         executorService.submit(new HiccupReporter()::start);
 
@@ -35,6 +32,17 @@ public final class PublisherMain {
                 configParser.getAllStageConfigs());
         publisher.init();
         publisher.startPublishing();
+    }
+
+    private static void startPretoucher(final ConfigParser configParser, final PublisherConfig publisherConfig,
+                                        final ExecutorService executorService) {
+        if (configParser.isPretouchOutOfBand()) {
+            PretoucherMain.startOutOfBandPretoucher(publisherConfig.outputDir(), executorService);
+        } else {
+            executorService.submit(
+                    new PretoucherTask(outputQueue(publisherConfig.outputDir()),
+                            configParser.getPretouchIntervalMillis()));
+        }
     }
 
     private static MethodDefinition createOutput(final Path path) {
@@ -46,9 +54,7 @@ public final class PublisherMain {
 
     @NotNull
     private static SingleChronicleQueue outputQueue(final Path path) {
-        return SingleChronicleQueueBuilder.binary(path).sourceId(0).
-                rollTime(RollTimeCalculator.getNextRollWindow(), ZoneId.of("UTC")).
-                rollCycle(RollCycles.HOURLY).build();
+        return QueueFactory.builderFor(path).sourceId(0).build();
     }
 
     private static class HiccupReporter {

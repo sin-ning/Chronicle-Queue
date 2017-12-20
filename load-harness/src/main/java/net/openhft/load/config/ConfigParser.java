@@ -14,6 +14,7 @@ public final class ConfigParser {
     private final PublisherConfig config;
     private final List<StageConfig> stageConfigList = new ArrayList<>();
     private final int pretouchIntervalMillis;
+    private final boolean pretouchOutOfBand;
 
     public ConfigParser(final String resourceName) throws IOException {
         final Properties properties = new Properties();
@@ -41,6 +42,7 @@ public final class ConfigParser {
         }
 
         pretouchIntervalMillis = requiredIntValue(properties, "pretouch.interval.ms");
+        pretouchOutOfBand = Boolean.valueOf(requiredValue(properties, "pretouch.outOfBand"));
     }
 
     public PublisherConfig getPublisherConfig() {
@@ -57,6 +59,10 @@ public final class ConfigParser {
 
     public int getPretouchIntervalMillis() {
         return pretouchIntervalMillis;
+    }
+
+    public boolean isPretouchOutOfBand() {
+        return pretouchOutOfBand;
     }
 
     private StageConfig parseStageConfig(final Properties properties, final int index) {
