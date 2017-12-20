@@ -1,5 +1,6 @@
 package net.openhft.load.pretoucher;
 
+import net.openhft.chronicle.queue.impl.WireStore;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
 import net.openhft.load.QueueFactory;
 
@@ -25,16 +26,19 @@ public final class FileCreatorMain {
 
                 final int cycle = queue.cycle();
 
-                final File file = queue.storeForCycle(cycle, queue.epoch(), false).file();
-                if (file != null) {
-                    final String[] tokens = file.getName().substring(0, file.getName().indexOf('.')).split("-");
-                    final File nextCycleFile = new File(file.getParent(), tokens[0] + "-" + (Integer.parseInt(tokens[1]) + 1) + ".cq4");
-                    if (!nextCycleFile.exists()) {
-                        System.out.printf("Creating file %s%n", nextCycleFile.getAbsolutePath());
-                        try (final RandomAccessFile rw = new RandomAccessFile(nextCycleFile, "rw")) {
-                            rw.setLength(1024 * 1024 * 2);
-                        } catch (IOException e) {
-                            System.err.println("Failed to pre-create file: " + e.getMessage());
+                final WireStore wireStore = queue.storeForCycle(cycle, queue.epoch(), false);
+                if (wireStore != null) {
+                    final File file = wireStore.file();
+                    if (file != null) {
+                        final String[] tokens = file.getName().substring(0, file.getName().indexOf('.')).split("-");
+                        final File nextCycleFile = new File(file.getParent(), tokens[0] + "-" + (Integer.parseInt(tokens[1]) + 1) + ".cq4");
+                        if (!nextCycleFile.exists()) {
+                            System.out.printf("Creating file %s%n", nextCycleFile.getAbsolutePath());
+                            try (final RandomAccessFile rw = new RandomAccessFile(nextCycleFile, "rw")) {
+                                rw.setLength(1024 * 1024 * 2);
+                            } catch (IOException e) {
+                                System.err.println("Failed to pre-create file: " + e.getMessage());
+                            }
                         }
                     }
                 }
