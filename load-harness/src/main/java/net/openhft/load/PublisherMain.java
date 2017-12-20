@@ -4,6 +4,7 @@ import net.openhft.chronicle.queue.ExcerptAppender;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
 import net.openhft.load.config.ConfigParser;
 import net.openhft.load.config.PublisherConfig;
+import net.openhft.load.pretoucher.FileCreatorMain;
 import net.openhft.load.pretoucher.PretoucherMain;
 import org.jetbrains.annotations.NotNull;
 
@@ -22,7 +23,7 @@ public final class PublisherMain {
         final ConfigParser configParser = new ConfigParser(args[0]);
 
         final PublisherConfig publisherConfig = configParser.getPublisherConfig();
-        final ExecutorService executorService = Executors.newFixedThreadPool(2);
+        final ExecutorService executorService = Executors.newCachedThreadPool();
 
         startPretoucher(configParser, publisherConfig, executorService);
 
@@ -38,6 +39,7 @@ public final class PublisherMain {
                                         final ExecutorService executorService) {
         if (configParser.isPretouchOutOfBand()) {
             PretoucherMain.startOutOfBandPretoucher(publisherConfig.outputDir(), executorService);
+            FileCreatorMain.startOutOfBandFileCreator(publisherConfig.outputDir(), executorService);
         } else {
             executorService.submit(
                     new PretoucherTask(outputQueue(publisherConfig.outputDir()),

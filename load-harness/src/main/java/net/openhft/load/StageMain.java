@@ -5,6 +5,7 @@ import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
 import net.openhft.load.config.ConfigParser;
 import net.openhft.load.config.StageConfig;
+import net.openhft.load.pretoucher.FileCreatorMain;
 import net.openhft.load.pretoucher.PretoucherMain;
 import org.jetbrains.annotations.NotNull;
 
@@ -25,7 +26,7 @@ public final class StageMain {
         final ConfigParser configParser = new ConfigParser(args[0]);
 
         final StageConfig stageConfig = configParser.getStageConfig(Integer.parseInt(args[1]));
-        final ExecutorService service = Executors.newFixedThreadPool(stageConfig.getStageIndices().size() + 1);
+        final ExecutorService service = Executors.newCachedThreadPool();
         startPretoucher(configParser, stageConfig, service);
 
         for (Integer index : stageConfig.getStageIndices()) {
@@ -54,6 +55,7 @@ public final class StageMain {
     private static void startPretoucher(final ConfigParser configParser, final StageConfig stageConfig, final ExecutorService service) {
         if (configParser.isPretouchOutOfBand()) {
             PretoucherMain.startOutOfBandPretoucher(stageConfig.getOutputPath(), service);
+            FileCreatorMain.startOutOfBandFileCreator(stageConfig.getOutputPath(), service);
         } else {
             service.submit(new PretoucherTask(outputQueue(stageConfig.getOutputPath(), UNSET_SOURCE),
                     configParser.getPretouchIntervalMillis()));

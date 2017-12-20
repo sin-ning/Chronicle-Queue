@@ -4,6 +4,7 @@ import net.openhft.chronicle.bytes.MethodReader;
 import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.util.Histogram;
 import net.openhft.chronicle.queue.impl.single.SingleChronicleQueue;
+import net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder;
 import net.openhft.chronicle.wire.Marshallable;
 import net.openhft.chronicle.wire.MessageHistory;
 import net.openhft.load.config.ConfigParser;
@@ -35,7 +36,7 @@ public final class ResultGenerator {
             System.out.println(m);
         }, (c, m, t) -> {System.out.println(m); if (t != null) {t.printStackTrace();}}, (c, m, t) -> System.out.println(m));
         try (final SingleChronicleQueue queue =
-                     QueueFactory.builderFor(lastStageConfig.getOutputPath()).build();
+                     SingleChronicleQueueBuilder.binary(lastStageConfig.getOutputPath()).build();
              final Writer resultsWriter = new FileWriter("results.txt", false)) {
             final MethodReader methodReader = queue.createTailer().methodReader(new CapturingReceiver(resultsWriter));
             while (methodReader.readOne()) {
