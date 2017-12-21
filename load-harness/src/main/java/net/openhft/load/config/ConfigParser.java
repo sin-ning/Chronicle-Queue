@@ -34,7 +34,8 @@ public final class ConfigParser {
         this.config = new PublisherConfig(
                 toRelativePath(requiredValue(properties, "publisher.outputDir")),
                 requiredIntValue(properties, "publisher.rate.mbps"), stageCount,
-                requiredIntValue(properties, "publisher.cpu"));
+                requiredIntValue(properties, "publisher.cpu"),
+                Boolean.valueOf(requiredValue(properties, "publisher.bursty")));
 
         for (int i = 0; i < stageCount; i++) {
             stageConfigList.add(parseStageConfig(properties, i));
