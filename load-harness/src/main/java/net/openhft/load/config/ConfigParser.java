@@ -1,7 +1,9 @@
 package net.openhft.load.config;
 
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -18,15 +20,21 @@ public final class ConfigParser {
 
     public ConfigParser(final String resourceName) throws IOException {
         final Properties properties = new Properties();
-        final InputStream stream = Thread.currentThread().getContextClassLoader().getResourceAsStream(resourceName);
-        if (stream == null) {
-            throw new IllegalArgumentException("Resource not found: " + resourceName);
+        if (Files.exists(Paths.get(resourceName))) {
+            final InputStream stream = new FileInputStream(Paths.get(resourceName).toFile());
+            properties.load(stream);
+        } else {
+            final InputStream stream = Thread.currentThread().getContextClassLoader().getResourceAsStream(resourceName);
+            if (stream == null) {
+                throw new IllegalArgumentException("Resource not found: " + resourceName);
+            }
+            properties.load(stream);
         }
-        properties.load(stream);
         final int stageCount = requiredIntValue(properties, "stage.count");
         this.config = new PublisherConfig(
                 toRelativePath(requiredValue(properties, "publisher.outputDir")),
-                requiredIntValue(properties, "publisher.rate.mbps"), stageCount);
+                requiredIntValue(properties, "publisher.rate.mbps"), stageCount,
+                requiredIntValue(properties, "publisher.cpu"));
 
         for (int i = 0; i < stageCount; i++) {
             stageConfigList.add(parseStageConfig(properties, i));
@@ -68,13 +76,15 @@ public final class ConfigParser {
     private StageConfig parseStageConfig(final Properties properties, final int index) {
         final int consumerCount = requiredIntValue(properties, String.format("stage.%d.consumers", index));
         final List<Integer> stageIndices = new ArrayList<>(consumerCount);
+        final List<Integer> cpus = new ArrayList<>(consumerCount);
         for (int i = 0; i < consumerCount; i++) {
             stageIndices.add(requiredIntValue(properties, String.format("stage.%d.consumer.%d.index", index, i)));
+            cpus.add(requiredIntValue(properties, String.format("stage.%d.consumer.%d.cpu", index, i)));
         }
         return new StageConfig(
                 toRelativePath(requiredValue(properties, String.format("stage.%d.inputDir", index))),
                 toRelativePath(requiredValue(properties, String.format("stage.%d.outputDir", index))),
-                stageIndices);
+                stageIndices, cpus);
     }
 
     private static Path toRelativePath(final String subDir) {

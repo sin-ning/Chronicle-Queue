@@ -39,6 +39,7 @@ public final class Publisher {
 
     public void startPublishing() {
         Thread.currentThread().setName("load.publisher");
+        AffinityHelper.setAffinity(config.getCpu());
         final long startPublishingAt = System.currentTimeMillis();
 
         boolean loggedException = false;

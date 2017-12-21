@@ -11,6 +11,8 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -28,12 +30,13 @@ public final class StageMain {
         final StageConfig stageConfig = configParser.getStageConfig(Integer.parseInt(args[1]));
         final ExecutorService service = Executors.newCachedThreadPool();
         startPretoucher(configParser, stageConfig, service);
-
+        final List<Integer> cpuList = new ArrayList<>(stageConfig.getCpus());
         for (Integer index : stageConfig.getStageIndices()) {
             service.submit(() -> {
                 final Stage stage = new Stage(createOutput(stageConfig.getOutputPath(), index + 1), index);
                 final MethodReader reader = createReader(stageConfig.getInputPath(), stage);
                 Thread.currentThread().setName("load.stage-consumer-" + index);
+                AffinityHelper.setAffinity(cpuList.remove(0));
                 boolean warnOnce = false;
                 while (!Thread.currentThread().isInterrupted()) {
                     try {
