@@ -33,7 +33,7 @@ public final class FileCreatorMain {
                     final File file = wireStore.file();
                     if (file != null) {
                         final String[] tokens = file.getName().substring(0, file.getName().indexOf('.')).split("-");
-                        final File nextCycleFile = new File(file.getParent(), tokens[0] + "-" + (Integer.parseInt(tokens[1]) + 1) + ".cq4");
+                        final File nextCycleFile = new File(file.getParent(), tokens[0] + "-" + padZero(tokens[1]) + ".cq4");
                         if (!nextCycleFile.exists()) {
                             System.out.printf("Creating file %s%n", nextCycleFile.getAbsolutePath());
                             try (final RandomAccessFile rw = new RandomAccessFile(nextCycleFile, "rw");
@@ -56,6 +56,11 @@ public final class FileCreatorMain {
                 }
             }
         }
+    }
+
+    private static String padZero(final String token) {
+        final int value = Integer.parseInt(token) + 1;
+        return value < 10 ? "0" + value : Integer.toString(value);
     }
 
     public static void startOutOfBandFileCreator(final Path queueDir, final ExecutorService executorService) {
