@@ -57,7 +57,7 @@ import static net.openhft.chronicle.queue.impl.single.SingleChronicleQueueExcerp
 import static net.openhft.chronicle.queue.impl.single.SingleChronicleQueueExcerpts.StoreTailer;
 
 public class SingleChronicleQueue implements RollingChronicleQueue {
-
+    private static final Object FILE_CREATION_LOCK = new String("FILE_CREATION_LOCK");
     public static final String SUFFIX = ".cq4";
     public static final String DISK_SPACE_CHECKER_NAME = DiskSpaceMonitor.DISK_SPACE_CHECKER_NAME;
 
@@ -763,79 +763,80 @@ public class SingleChronicleQueue implements RollingChronicleQueue {
 
         @Override
         public WireStore acquire(int cycle, boolean createIfAbsent) {
+            synchronized (FILE_CREATION_LOCK) {
+                SingleChronicleQueue that = SingleChronicleQueue.this;
+                @NotNull final RollingResourcesCache.Resource dateValue = that
+                        .dateCache.resourceFor(cycle);
+                try {
+                    File path = dateValue.path;
 
-            SingleChronicleQueue that = SingleChronicleQueue.this;
-            @NotNull final RollingResourcesCache.Resource dateValue = that
-                    .dateCache.resourceFor(cycle);
-            try {
-                File path = dateValue.path;
-
-                if (!createIfAbsent &&
-                        (cycle > directoryListing.getMaxCreatedCycle()
-                                || cycle < directoryListing.getMinCreatedCycle()
-                                || !path.exists())) {
-                    return null;
-                }
-
-                final File parentFile = dateValue.parentPath;
-
-                if (createIfAbsent)
-                    checkDiskSpace(that.path);
-
-                if (!dateValue.pathExists && createIfAbsent && !path.exists()) {
-                    parentFile.mkdirs();
-                    PrecreatedFiles.renamePreCreatedFileToRequiredFile(path);
-                    // before we create a new file, we need to ensure previous file has got EOF mark
-                    // but only if we are not in the process of normal rolling
-                    QueueFiles.writeEOFIfNeeded(path.toPath(), wireType(), blockSize(), timeoutMS, pauserSupplier.get());
-                }
-                dateValue.pathExists = true;
-
-                final MappedBytes mappedBytes = mappedFileCache.get(path);
-
-                directoryListing.onFileCreated(path, cycle);
-
-                if (SHOULD_CHECK_CYCLE && cycle != rollCycle.current(time, epoch)) {
-                    Jvm.warn().on(getClass(), new Exception("Creating cycle whcih is not the current cycle"));
-                }
-                queuePathExists = true;
-                AbstractWire wire = (AbstractWire) wireType.apply(mappedBytes);
-                assert wire.startUse();
-                wire.pauser(pauserSupplier.get());
-                wire.headerNumber(rollCycle.toIndex(cycle, 0) - 1);
-
-                WireStore wireStore;
-                if ((!readOnly) && wire.writeFirstHeader()) {
-                    wireStore = storeFactory.apply(that, wire);
-                    wire.updateFirstHeader();
-                } else {
-                    wire.readFirstHeader(timeoutMS, TimeUnit.MILLISECONDS);
-
-                    StringBuilder name = Wires.acquireStringBuilder();
-                    ValueIn valueIn = wire.readEventName(name);
-                    if (StringUtils.isEqual(name, MetaDataKeys.header.name())) {
-                        wireStore = valueIn.typedMarshallable();
-                        int queueInstanceSourceId = SingleChronicleQueue.this.sourceId;
-                        int cq4FileSourceId = wireStore.sourceId();
-
-                        assert queueInstanceSourceId == 0 || cq4FileSourceId == 0 || queueInstanceSourceId ==
-                                cq4FileSourceId : "inconsistency with the source id's, the " +
-                                "cq4FileSourceId=" +
-                                cq4FileSourceId + " != " +
-                                "queueInstanceSourceId=" + queueInstanceSourceId;
-
-                        if (cq4FileSourceId != 0)
-                            SingleChronicleQueue.this.sourceId = cq4FileSourceId;
-                    } else {
-                        //noinspection unchecked
-                        throw new StreamCorruptedException("The first message should be the header, was " + name);
+                    if (!createIfAbsent &&
+                            (cycle > directoryListing.getMaxCreatedCycle()
+                                    || cycle < directoryListing.getMinCreatedCycle()
+                                    || !path.exists())) {
+                        return null;
                     }
+
+                    final File parentFile = dateValue.parentPath;
+
+                    if (createIfAbsent)
+                        checkDiskSpace(that.path);
+
+                    if (!dateValue.pathExists && createIfAbsent && !path.exists()) {
+                        parentFile.mkdirs();
+                        PrecreatedFiles.renamePreCreatedFileToRequiredFile(path);
+                        // before we create a new file, we need to ensure previous file has got EOF mark
+                        // but only if we are not in the process of normal rolling
+                        QueueFiles.writeEOFIfNeeded(path.toPath(), wireType(), blockSize(), timeoutMS, pauserSupplier.get());
+                    }
+                    dateValue.pathExists = true;
+
+                    final MappedBytes mappedBytes = mappedFileCache.get(path);
+
+                    directoryListing.onFileCreated(path, cycle);
+
+                    if (SHOULD_CHECK_CYCLE && cycle != rollCycle.current(time, epoch)) {
+                        Jvm.warn().on(getClass(), new Exception("Creating cycle which is not the current cycle"));
+                    }
+                    queuePathExists = true;
+                    AbstractWire wire = (AbstractWire) wireType.apply(mappedBytes);
+                    assert wire.startUse();
+                    wire.pauser(pauserSupplier.get());
+                    wire.headerNumber(rollCycle.toIndex(cycle, 0) - 1);
+
+                    WireStore wireStore;
+                    if ((!readOnly) && wire.writeFirstHeader()) {
+                        wireStore = storeFactory.apply(that, wire);
+                        wire.updateFirstHeader();
+                    } else {
+                        wire.readFirstHeader(timeoutMS, TimeUnit.MILLISECONDS);
+
+                        StringBuilder name = Wires.acquireStringBuilder();
+                        ValueIn valueIn = wire.readEventName(name);
+                        if (StringUtils.isEqual(name, MetaDataKeys.header.name())) {
+                            wireStore = valueIn.typedMarshallable();
+                            int queueInstanceSourceId = SingleChronicleQueue.this.sourceId;
+                            int cq4FileSourceId = wireStore.sourceId();
+
+                            assert queueInstanceSourceId == 0 || cq4FileSourceId == 0 || queueInstanceSourceId ==
+                                    cq4FileSourceId : "inconsistency with the source id's, the " +
+                                    "cq4FileSourceId=" +
+                                    cq4FileSourceId + " != " +
+                                    "queueInstanceSourceId=" + queueInstanceSourceId;
+
+                            if (cq4FileSourceId != 0)
+                                SingleChronicleQueue.this.sourceId = cq4FileSourceId;
+                        } else {
+                            //noinspection unchecked
+                            throw new StreamCorruptedException("The first message should be the header, was " + name);
+                        }
+                    }
+
+                    return wireStore;
+
+                } catch (@NotNull TimeoutException | IOException e) {
+                    throw Jvm.rethrow(e);
                 }
-
-                return wireStore;
-
-            } catch (@NotNull TimeoutException | IOException e) {
-                throw Jvm.rethrow(e);
             }
         }
 
