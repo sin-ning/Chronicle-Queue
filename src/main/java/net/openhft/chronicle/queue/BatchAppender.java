@@ -5,8 +5,8 @@ import net.openhft.chronicle.bytes.Bytes;
 /**
  * Created by Rob Austin
  *
- * This API is and Advanced Chronicle Queue API that should be used with care, an only used if you
- * are sure you know what you are doing, misuse of this API could corrupt you data or even
+ * This API is and advanced Chronicle Queue API that should be used with care and only used if you
+ * are sure you know what you are doing, misuse of this API could corrupt your data or even
  * worst cause the JVM or your application to crash.
  *
  *
@@ -25,7 +25,7 @@ import net.openhft.chronicle.bytes.Bytes;
  * When you come to write each message you must start by skipping 4 bytes in other words leaving them as byte[]{0,0,0,0} [ which will become the length later ( as a java int ) ], first write the data, then go back and set the 4 byte length, the data must be written first and then the length to ensure that a tailer does not attempt to read a half written message.
  *
  * The appending thread must make sure that it does not exceed the rawMaxMessage() or rawMaxBytes().
- * If no more can data be written directly, the next call must be to:
+ * If no more data can be written to the off heap memory, then the next call must be to:
  *
  * {@link net.openhft.chronicle.queue.BatchAppender#update(net.openhft.chronicle.bytes.Bytes, long, long)}
  *
@@ -47,7 +47,7 @@ public interface BatchAppender {
     int rawMaxBytes();
 
     /**
-     * @return the address of the next message
+     * @return the address of where to start to write a batch of messages to the off heap memory.
      */
     long rawAddress();
 
