@@ -1,7 +1,5 @@
 package net.openhft.chronicle.queue;
 
-import net.openhft.chronicle.bytes.Bytes;
-
 /**
  * Created by Rob Austin
  *
@@ -9,9 +7,9 @@ import net.openhft.chronicle.bytes.Bytes;
  * are sure you know what you are doing, misuse of this API could corrupt your data or even
  * worst cause the JVM or your application to crash.
  *
- *
  * You should only consider this API if :
- * - you have a batch of messages that you wish to write to a chronicle queue and you wish to write them directly to the off heap memory
+ * - you have a batch of messages that you wish to write to a chronicle queue and you wish to write
+ *      them directly to the off heap memory
  * - you only have a single appender thread
  * - you don't care about queue roll [ in other words this API wont take account of Queue Roll]
  *
@@ -22,12 +20,15 @@ import net.openhft.chronicle.bytes.Bytes;
  * Writing Each Message
  * --------------------
  *
- * When you come to write each message you must start by skipping 4 bytes in other words leaving them as byte[]{0,0,0,0} [ which will become the length later ( as a java int ) ], first write the data, then go back and set the 4 byte length, the data must be written first and then the length to ensure that a tailer does not attempt to read a half written message.
+ * When you come to write each message you must start by skipping 4 bytes in other words leaving
+ * them as byte[]{0,0,0,0} [ which will become the length later ( as a java int ) ],
+ * first write the data, then go back and set the 4 byte length, the data must be written first
+ * and then the length to ensure that a tailer does not attempt to read a half written message.
  *
  * The appending thread must make sure that it does not exceed the rawMaxMessage() or rawMaxBytes().
  * If no more data can be written to the off heap memory, then the next call must be to:
  *
- * {@link net.openhft.chronicle.queue.BatchAppender#update(net.openhft.chronicle.bytes.Bytes, long, long)}
+ * {@link BatchAppender#write(long, int, long, long)}
  *
  * This is because periodically, some messages must be indexed or written to a different block of
  * off heap memory
@@ -36,13 +37,13 @@ public interface BatchAppender {
 
     /**
      * @return the maximum number of messages that can be written directly to the off heap memory
-     * before calling {@link net.openhft.chronicle.queue.BatchAppender#update(net.openhft.chronicle.bytes.Bytes, long, long)}, this is based on the indexing used.
+     * before calling {@link BatchAppender#write(long, int, long, long)}, this is based on the indexing used.
      */
     int rawMaxMessage();
 
     /**
      * @return the maximum number of bytes that can be written directly to the off heap memory
-     * before calling {@link net.openhft.chronicle.queue.BatchAppender#update(net.openhft.chronicle.bytes.Bytes, long, long)}, this is based on the block size used.
+     * before calling {@link BatchAppender#write(long, int, long, long)}, this is based on the block size used.
      */
     int rawMaxBytes();
 
@@ -56,11 +57,15 @@ public interface BatchAppender {
      * messages  in this batch is now equal to rawMaxMessage() or there is no sufficient space to
      * write any more data based on the rawMaxBytes(). You should also add the 4 byte length to
      * the size of each message.
-     *
-     * @param bytes            the data to be written to the chronicle-queue
-     * @param address          the address of the last message written.
-     * @param numberOfMessages the number of messages that where written in the last batch
+     * @param sourceBytesAddress            the address of the data to be written to the queue
+     * @param sourceByteSize                the size in bytes of the source
+     * @param endOfQueueAddress             the address of the last message written to the queue
+     * @param numberOfMessagesInLastBatch              the number of messages that where written in the last
+     *                                     batch excluding this message.
      */
-    void write(Bytes bytes, long address, long numberOfMessages);
+    void write(long sourceBytesAddress,
+               final int sourceByteSize,
+               long endOfQueueAddress,
+               long numberOfMessagesInLastBatch);
 
 }
