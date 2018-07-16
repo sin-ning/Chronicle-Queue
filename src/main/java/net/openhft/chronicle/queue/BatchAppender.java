@@ -52,15 +52,15 @@ public interface BatchAppender {
     long rawAddress();
 
     /**
-     * You should make this call at the end of each batch, in other words if number of
+     * You should make this call at the end of each batch, in other words if the number of
      * messages  in this batch is now equal to rawMaxMessage() or there is no sufficient space to
-     * write any more data based on the rawMaxBytes(). You should also add the 4 byte lenght to
+     * write any more data based on the rawMaxBytes(). You should also add the 4 byte length to
      * the size of each message.
      *
      * @param bytes            the data to be written to the chronicle-queue
      * @param address          the address of the last message written.
      * @param numberOfMessages the number of messages that where written in the last batch
      */
-    void update(Bytes bytes, long address, long numberOfMessages);
+    void write(Bytes bytes, long address, long numberOfMessages);
 
 }
