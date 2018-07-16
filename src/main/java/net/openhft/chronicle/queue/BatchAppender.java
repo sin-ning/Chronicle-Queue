@@ -52,11 +52,10 @@ public interface BatchAppender {
     long rawAddress();
 
     /**
-     * you should make this call at the end of each batch, the reason for this call, is that the
-     * next message must be written by chronicle-queue, either because the next message requires
-     * indexing or the next message has to be written to a different block, if you can not
-     * complete writing a full message + the 4 byte len directly to the off heap memory then you
-     * shuld call this method instead.
+     * You should make this call at the end of each batch, in other words if number of
+     * messages  in this batch is now equal to rawMaxMessage() or there is no sufficient space to
+     * write any more data based on the rawMaxBytes(). You should also add the 4 byte lenght to
+     * the size of each message.
      *
      * @param bytes            the data to be written to the chronicle-queue
      * @param address          the address of the last message written.
