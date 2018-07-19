@@ -204,7 +204,8 @@ public class SingleChronicleQueueExcerpts {
         @Override
         public long batchAppend(final int timeout, final int size, BatchAppender batchAppender) {
 
-            NativeBytesStore<Void> nbs = NativeBytesStore.nativeStoreWithFixedCapacity(size);
+            long maxMsgSize = (long) (this.queue.blockSize() * 0.25);
+            NativeBytesStore<Void> tmp = NativeBytesStore.lazyNativeBytesStoreWithFixedCapacity(maxMsgSize);
             long startTime = System.nanoTime();
             long count = 0;
             long lastIndex = -1;
@@ -229,13 +230,16 @@ public class SingleChronicleQueueExcerpts {
 
                     } else {
                         try (DocumentContext dc = writingDocument()) {
-                            dc.wire().bytes().write(nbs);
+                            long lengthCount = batchAppender.writeMessages(tmp.addressForWrite(0), maxMsgSize, 1);
+                            int len = (int) lengthCount;
+                            dc.wire().bytes().write(tmp, 0L, len);
                         }
                         lastIndex = lastIndexAppended();
                         count++;
                     }
                 }
             } while (startTime + timeout * 1e9 > System.nanoTime());
+
             return count;
         }
 
