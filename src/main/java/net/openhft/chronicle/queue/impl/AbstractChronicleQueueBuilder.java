@@ -24,12 +24,12 @@ import net.openhft.chronicle.core.threads.EventLoop;
 import net.openhft.chronicle.core.time.SystemTimeProvider;
 import net.openhft.chronicle.core.time.TimeProvider;
 import net.openhft.chronicle.core.util.ObjectUtils;
-import net.openhft.chronicle.core.util.StringUtils;
 import net.openhft.chronicle.queue.*;
 import net.openhft.chronicle.queue.impl.single.StoreRecoveryFactory;
 import net.openhft.chronicle.queue.impl.single.TimedStoreRecovery;
 import net.openhft.chronicle.threads.TimeoutPauser;
 import net.openhft.chronicle.threads.TimingPauser;
+import net.openhft.chronicle.wire.Marshallable;
 import net.openhft.chronicle.wire.WireType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -48,28 +48,33 @@ import static net.openhft.chronicle.queue.ChronicleQueue.TEST_BLOCK_SIZE;
 
 @SuppressWarnings("unchecked")
 public abstract class AbstractChronicleQueueBuilder<B extends ChronicleQueueBuilder>
-        implements ChronicleQueueBuilder<B> {
+        implements ChronicleQueueBuilder<B>, Marshallable {
 
     protected File path;
+    protected Long blockSize;
+
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractChronicleQueueBuilder.class);
     public static final String DEFAULT_ROLL_CYCLE_PROPERTY = "net.openhft.queue.builder.defaultRollCycle";
     public static final String DEFAULT_EPOCH_PROPERTY = "net.openhft.queue.builder.defaultEpoch";
 
-    protected long blockSize;
-    @NotNull
     protected WireType wireType;
-    @NotNull
+
     protected RollCycle rollCycle;
-    protected long epoch; // default is 1970-01-01 00:00:00.000 UTC
-    protected BufferMode writeBufferMode = BufferMode.None, readBufferMode = BufferMode.None;
-    protected boolean enableRingBufferMonitoring;
+    protected Long epoch; // default is 1970-01-01 00:00:00.000 UTC
+    public BufferMode writeBufferMode = BufferMode.None, readBufferMode = BufferMode.None;
+    protected Boolean enableRingBufferMonitoring;
     @Nullable
     protected EventLoop eventLoop;
-    @NotNull
-    protected CycleCalculator cycleCalculator = DefaultCycleCalculator.INSTANCE;
-    private long bufferCapacity;
-    private int indexSpacing;
-    private int indexCount;
+
+    @Override
+    public boolean hasBlockSize() {
+        return blockSize != null;
+    }
+
+    protected CycleCalculator cycleCalculator;
+    private Long bufferCapacity;
+    private Integer indexSpacing;
+    private Integer indexCount;
     /**
      * by default logs the performance stats of the ring buffer
      */
@@ -77,26 +82,17 @@ public abstract class AbstractChronicleQueueBuilder<B extends ChronicleQueueBuil
     private Consumer<BytesRingBufferStats> onRingBufferStats = NoBytesRingBufferStats.NONE;
     private TimeProvider timeProvider = SystemTimeProvider.INSTANCE;
     private Supplier<TimingPauser> pauserSupplier = () -> new TimeoutPauser(500_000);
-    private long timeoutMS = 10_000; // 10 seconds.
+    private Long timeoutMS; // 10 seconds.
     private WireStoreFactory storeFactory;
-    private int sourceId = 0;
+    private Integer sourceId;
     private StoreRecoveryFactory recoverySupplier = TimedStoreRecovery.FACTORY;
     private StoreFileListener storeFileListener;
 
-    protected boolean readOnly = false;
-    private boolean strongAppenders = false;
+    protected Boolean readOnly = false;
+    private Boolean strongAppenders = false;
 
     public AbstractChronicleQueueBuilder(File path) {
-        this.rollCycle = loadDefaultRollCycle();
-
-
-        this.blockSize = OS.is64Bit() ? 64L << 20 : TEST_BLOCK_SIZE;
         this.path = path;
-        this.wireType = WireType.BINARY_LIGHT;
-        this.epoch = Long.getLong(DEFAULT_EPOCH_PROPERTY, 0L);
-        this.bufferCapacity = -1;
-        this.indexSpacing = -1;
-        this.indexCount = -1;
         storeFileListener = (cycle, file) -> {
             if (Jvm.isDebugEnabled(getClass()))
                 Jvm.debug().on(getClass(), "File released " + file);
@@ -148,7 +144,7 @@ public abstract class AbstractChronicleQueueBuilder<B extends ChronicleQueueBuil
     @Override
     @NotNull
     public CycleCalculator cycleCalculator() {
-        return cycleCalculator;
+        return cycleCalculator == null ? DefaultCycleCalculator.INSTANCE : cycleCalculator;
     }
 
     public B path(final File path) {
@@ -178,7 +174,7 @@ public abstract class AbstractChronicleQueueBuilder<B extends ChronicleQueueBuil
     @NotNull
     @Override
     public Consumer<BytesRingBufferStats> onRingBufferStats() {
-        return this.onRingBufferStats;
+        return this.onRingBufferStats == null ? NoBytesRingBufferStats.NONE : onRingBufferStats;
     }
 
     @Override
@@ -201,9 +197,12 @@ public abstract class AbstractChronicleQueueBuilder<B extends ChronicleQueueBuil
 
     @Override
     public long blockSize() {
+
+        long bs = blockSize == null ? OS.is64Bit() ? 64L << 20 : TEST_BLOCK_SIZE : blockSize;
+
         // can add an index2index & an index in one go.
         long minSize = Math.max(TEST_BLOCK_SIZE, 32L * indexCount());
-        return Math.max(minSize, this.blockSize);
+        return Math.max(minSize, bs);
     }
 
     @Override
@@ -216,7 +215,7 @@ public abstract class AbstractChronicleQueueBuilder<B extends ChronicleQueueBuil
     @Override
     @NotNull
     public WireType wireType() {
-        return this.wireType;
+        return this.wireType == null ? WireType.BINARY_LIGHT : wireType;
     }
 
     @Override
@@ -231,7 +230,10 @@ public abstract class AbstractChronicleQueueBuilder<B extends ChronicleQueueBuil
      */
     @Override
     public long bufferCapacity() {
-        return Math.min(blockSize / 4, bufferCapacity == -1 ? 2 << 20 : Math.max(4 << 10, bufferCapacity));
+        long bufferCapacity = this.bufferCapacity == null ? 0 : this.bufferCapacity;
+        Long blockSize = blockSize();
+        return Math.min(blockSize / 4, bufferCapacity == -1 ? 2 << 20 : Math.max(4 << 10,
+                bufferCapacity));
     }
 
     /**
@@ -265,13 +267,14 @@ public abstract class AbstractChronicleQueueBuilder<B extends ChronicleQueueBuil
      */
     @Override
     public long epoch() {
-        return epoch;
+        return epoch == null ?  Long.getLong(DEFAULT_EPOCH_PROPERTY, 0L) : epoch;
     }
 
     @Override
     @NotNull
     public RollCycle rollCycle() {
-        return this.rollCycle;
+        RollCycle defaultRollCycle = loadDefaultRollCycle();
+        return this.rollCycle == null ? defaultRollCycle : this.rollCycle;
     }
 
     /**
@@ -304,7 +307,8 @@ public abstract class AbstractChronicleQueueBuilder<B extends ChronicleQueueBuil
      */
     @NotNull
     public BufferMode writeBufferMode() {
-        return wireType() == WireType.DELTA_BINARY ? BufferMode.None : writeBufferMode;
+        return wireType() == WireType.DELTA_BINARY ? BufferMode.None : (writeBufferMode == null)
+                ? BufferMode.None : writeBufferMode;
     }
 
     public B writeBufferMode(BufferMode writeBufferMode) {
@@ -340,8 +344,8 @@ public abstract class AbstractChronicleQueueBuilder<B extends ChronicleQueueBuil
     /**
      * @return if the ring buffer's monitoring capability is turned on. Not available in OSS
      */
-    public boolean enableRingBufferMonitoring() {
-        return enableRingBufferMonitoring;
+    public Boolean enableRingBufferMonitoring() {
+        return enableRingBufferMonitoring == null ? false : enableRingBufferMonitoring;
     }
 
     public B enableRingBufferMonitoring(boolean enableRingBufferMonitoring) {
@@ -357,7 +361,7 @@ public abstract class AbstractChronicleQueueBuilder<B extends ChronicleQueueBuil
 
     @Override
     public int indexCount() {
-        return indexCount <= 0 ? rollCycle.defaultIndexCount() : indexCount;
+        return indexCount == null || indexCount <= 0 ? rollCycle().defaultIndexCount() : indexCount;
     }
 
     @Override
@@ -368,11 +372,12 @@ public abstract class AbstractChronicleQueueBuilder<B extends ChronicleQueueBuil
 
     @Override
     public int indexSpacing() {
-        return indexSpacing <= 0 ? rollCycle.defaultIndexSpacing() : indexSpacing;
+        return indexSpacing == null || indexSpacing <= 0 ? rollCycle().defaultIndexSpacing() :
+                indexSpacing;
     }
 
     public TimeProvider timeProvider() {
-        return timeProvider;
+        return timeProvider == null ? SystemTimeProvider.INSTANCE : timeProvider;
     }
 
     public B timeProvider(TimeProvider timeProvider) {
@@ -395,7 +400,7 @@ public abstract class AbstractChronicleQueueBuilder<B extends ChronicleQueueBuil
     }
 
     public long timeoutMS() {
-        return timeoutMS;
+        return timeoutMS == null ? 10_000L : timeoutMS;
     }
 
     public void storeFactory(WireStoreFactory storeFactory) {
@@ -426,7 +431,7 @@ public abstract class AbstractChronicleQueueBuilder<B extends ChronicleQueueBuil
     }
 
     public int sourceId() {
-        return sourceId;
+        return sourceId == null ? 0 : sourceId;
     }
 
     public StoreRecoveryFactory recoverySupplier() {
@@ -440,7 +445,7 @@ public abstract class AbstractChronicleQueueBuilder<B extends ChronicleQueueBuil
 
     @Override
     public boolean readOnly() {
-        return readOnly && !OS.isWindows();
+        return readOnly == Boolean.TRUE && !OS.isWindows();
     }
 
     @Override
