@@ -26,18 +26,15 @@ import net.openhft.chronicle.wire.Marshallable;
 import net.openhft.chronicle.wire.WireOut;
 import org.jetbrains.annotations.NotNull;
 import org.junit.After;
-import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
 import java.io.File;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.function.BiConsumer;
 
 import static net.openhft.chronicle.queue.impl.single.SingleChronicleQueueBuilder.binary;
-import static org.hamcrest.CoreMatchers.containsString;
 import static org.junit.Assert.*;
 
 public class NotCompleteTest {
@@ -46,8 +43,7 @@ public class NotCompleteTest {
      * tests that when flags are set to not complete we are able to recover
      */
     @Test
-    public void testUsingANotCompleteQueue()
-            throws InterruptedException {
+    public void testUsingANotCompleteQueue() throws InterruptedException {
 
         BinaryLongReference.startCollecting();
 
@@ -82,6 +78,7 @@ public class NotCompleteTest {
                 assertEquals("data", dc.wire().read(() -> "some").text());
             }
         }
+
     }
 
     @Test
@@ -121,6 +118,7 @@ public class NotCompleteTest {
                 assertEquals("data", dc.wire().read(() -> "some").text());
             }
         }
+
     }
 
     @Test
@@ -220,6 +218,7 @@ public class NotCompleteTest {
 
             assertEquals(expected, queue.dump());
         }
+
     }
 
     @Test
@@ -320,6 +319,7 @@ public class NotCompleteTest {
             assertEquals(person2.name, names.get(1));
             assertFalse(reader.readOne());
         }
+
     }
 
     // the last line of the dump changes - haven't spent the time to get to the bottom of this
