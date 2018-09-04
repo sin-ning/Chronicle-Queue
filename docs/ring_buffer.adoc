@@ -13,6 +13,8 @@ through two different implementations of the `ChronicleQueue` interface.
 https://jerryshea.github.io/2018/07/27/RingBuffer.html[This article] gives some examples of how high-percentile
 latencies can be reduced.
 
+
+
 [NOTE]
 ====
 Ring buffer functionality is still under development; you will still see UnsupportedOperationExceptions
@@ -176,3 +178,7 @@ drain to an underlying queue, for example. It is created as in the example below
 
 It can be used in the same way as any other Chronicle Queue implementation, but it is recommended to use
 software.chronicle.enterprise.queue.EnterpriseSingleChronicleQueue in preference.
+
+=== Licence
+
+The Ring Buffer is a licenced product and is licenced separately to chronicle queue enterprise.
