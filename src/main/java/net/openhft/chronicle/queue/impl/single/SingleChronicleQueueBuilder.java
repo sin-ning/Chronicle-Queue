@@ -224,7 +224,7 @@ public class SingleChronicleQueueBuilder implements Cloneable, Marshallable {
      *                           number between 0-63 ( inclusive ), default the delta messaging is
      *                           check pointed every 64 messages, so the default {@code
      *                           deltaIntervalShift  == 6}, as {@code 1 << 6 == 64 }
-     * @return the EnterpriseChronicleQueueBuilder
+     * @return the SingleChronicleQueueBuilder
      */
     public static SingleChronicleQueueBuilder deltaBinary(@NotNull File name, byte deltaIntervalShift) {
         @NotNull SingleChronicleQueueBuilder ret = deltaBinary(name);
@@ -489,6 +489,11 @@ public class SingleChronicleQueueBuilder implements Cloneable, Marshallable {
 
     public SingleChronicleQueueBuilder path(final File path) {
         this.path = path;
+        return this;
+    }
+
+    public SingleChronicleQueueBuilder path(final Path path) {
+        this.path = path.toFile();
         return this;
     }
 
