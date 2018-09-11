@@ -20,6 +20,7 @@ import net.openhft.chronicle.bytes.*;
 import net.openhft.chronicle.bytes.util.DecoratedBufferUnderflowException;
 import net.openhft.chronicle.core.Jvm;
 import net.openhft.chronicle.core.UnsafeMemory;
+import net.openhft.chronicle.core.annotation.PackageLocal;
 import net.openhft.chronicle.core.io.IORuntimeException;
 import net.openhft.chronicle.core.pool.StringBuilderPool;
 import net.openhft.chronicle.queue.*;
@@ -45,7 +46,6 @@ import static net.openhft.chronicle.wire.Wires.*;
 
 public class SingleChronicleQueueExcerpts {
 
-    private static final boolean CHECK_INTERRUPTS = !Boolean.getBoolean("chronicle.queue.ignoreInterrupts");
     private static final Logger LOG = LoggerFactory.getLogger(SingleChronicleQueueExcerpts.class);
     private static final int MESSAGE_HISTORY_METHOD_ID = -1;
     private static StringBuilderPool SBP = new StringBuilderPool();
@@ -74,6 +74,7 @@ public class SingleChronicleQueueExcerpts {
         private final StoreAppenderContext context;
         private final ClosableResources closableResources;
         private final WireStorePool storePool;
+        private final boolean checkInterrupts;
         @Nullable
         WireStore store;
         private int cycle = Integer.MIN_VALUE;
@@ -91,13 +92,19 @@ public class SingleChronicleQueueExcerpts {
         private Pretoucher pretoucher = null;
         private Padding padToCacheLines = Padding.SMART;
 
-        StoreAppender(@NotNull SingleChronicleQueue queue, @NotNull WireStorePool storePool) {
+        StoreAppender(@NotNull SingleChronicleQueue queue,
+                      @NotNull WireStorePool storePool,
+                      boolean checkInterrupts) {
             this.queue = queue;
-            this.writeLock = queue.writeLock();
-            queue.addCloseListener(this, StoreAppender::close);
-            context = new StoreAppenderContext();
             this.storePool = storePool;
-            closableResources = new ClosableResources(queue);
+            this.checkInterrupts = checkInterrupts;
+
+            this.writeLock = queue.writeLock();
+            this.context = new StoreAppenderContext();
+            this.closableResources = new ClosableResources(queue);
+
+            // always put references to "this" last.
+            queue.addCloseListener(this, StoreAppender::close);
         }
 
         @Deprecated // Should not be providing accessors to reference-counted objects
@@ -135,16 +142,6 @@ public class SingleChronicleQueueExcerpts {
         public void writeBytes(@NotNull WriteBytesMarshallable marshallable) throws UnrecoverableTimeoutException {
             try (DocumentContext dc = writingDocument()) {
                 marshallable.writeMarshallable(dc.wire().bytes());
-                if (padToCacheAlignMode() != Padding.ALWAYS)
-                    ((StoreAppenderContext) dc).padToCacheAlign = false;
-            }
-        }
-
-        @Override
-        public void writeText(@NotNull CharSequence text) throws UnrecoverableTimeoutException {
-            try (DocumentContext dc = writingDocument()) {
-                dc.wire().bytes()
-                        .append8bit(text);
                 if (padToCacheAlignMode() != Padding.ALWAYS)
                     ((StoreAppenderContext) dc).padToCacheAlign = false;
             }
@@ -734,16 +731,9 @@ public class SingleChronicleQueueExcerpts {
                 }
 
                 try {
-                    final boolean interrupted = CHECK_INTERRUPTS && Thread.currentThread().isInterrupted();
+                    final boolean interrupted = checkInterrupts && Thread.currentThread().isInterrupted();
                     if (rollbackOnClose || interrupted) {
-                        if (interrupted)
-                            LOG.warn("Thread is interrupted. Can't guarantee complete message, so not committing");
-                        // zero out all contents...
-                        for (long i = position; i <= wire.bytes().writePosition(); i++)
-                            wire.bytes().writeByte(i, (byte) 0);
-                        position = lastPosition;
-                        wire.bytes().writePosition(position);
-                        ((AbstractWire) wire).forceNotInsideHeader();
+                        doRollback(interrupted);
                         return;
                     }
 
@@ -786,6 +776,17 @@ public class SingleChronicleQueueExcerpts {
                             Jvm.warn().on(getClass(), "Exception while unlocking: ", ex);
                         }
                 }
+            }
+
+            private void doRollback(boolean interrupted) {
+                if (interrupted)
+                    LOG.warn("Thread is interrupted. Can't guarantee complete message, so not committing");
+                // zero out all contents...
+                for (long i = position; i <= wire.bytes().writePosition(); i++)
+                    wire.bytes().writeByte(i, (byte) 0);
+                position = lastPosition;
+                wire.bytes().writePosition(position);
+                ((AbstractWire) wire).forceNotInsideHeader();
             }
 
             @Override
@@ -1665,7 +1666,8 @@ public class SingleChronicleQueueExcerpts {
             getCloserJob().run();
         }
 
-        private void incrementIndex() {
+        @PackageLocal
+        void incrementIndex() {
             RollCycle rollCycle = queue.rollCycle();
             long seq = rollCycle.toSequenceNumber(this.index);
             int cycle = rollCycle.toCycle(this.index);

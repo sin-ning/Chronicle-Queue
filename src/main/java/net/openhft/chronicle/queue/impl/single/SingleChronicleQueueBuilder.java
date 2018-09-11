@@ -123,6 +123,7 @@ public class SingleChronicleQueueBuilder implements Cloneable, Marshallable {
 
     private Boolean readOnly;
     private Boolean strongAppenders;
+    private Boolean checkInterrupts;
 
     private TableStore<SCQMeta> metaStore;
 
@@ -482,7 +483,6 @@ public class SingleChronicleQueueBuilder implements Cloneable, Marshallable {
     }
 
 
-
     public SingleChronicleQueueBuilder path(String path) {
         return path(new File(path));
     }
@@ -829,7 +829,24 @@ public class SingleChronicleQueueBuilder implements Cloneable, Marshallable {
     }
 
     public boolean strongAppenders() {
-        return strongAppenders == Boolean.TRUE;
+        return Boolean.TRUE.equals(strongAppenders);
+    }
+
+    public boolean checkInterrupts() {
+        if (checkInterrupts == null) {
+            if (System.getProperties().contains("chronicle.queue.ignoreInterrupts"))
+                return !Boolean.getBoolean("chronicle.queue.ignoreInterrupts");
+            if (System.getProperties().contains("chronicle.queue.checkInterrupts"))
+                return Boolean.getBoolean("chronicle.queue.checkInterrupts");
+        }
+
+        // default is true unless turned off.
+        return !Boolean.FALSE.equals(checkInterrupts);
+    }
+
+    public SingleChronicleQueueBuilder checkInterrupts(boolean checkInterrupts) {
+        this.checkInterrupts = checkInterrupts;
+        return this;
     }
 
     public SingleChronicleQueueBuilder clone() {
@@ -851,7 +868,7 @@ public class SingleChronicleQueueBuilder implements Cloneable, Marshallable {
         if (parentBuilder == null)
             return this;
 
-        if (! (this.getClass().isAssignableFrom(parentBuilder.getClass()) || parentBuilder.getClass().isAssignableFrom(this.getClass())))
+        if (!(this.getClass().isAssignableFrom(parentBuilder.getClass()) || parentBuilder.getClass().isAssignableFrom(this.getClass())))
             throw new IllegalArgumentException("Classes are not in same implementation hierarchy");
 
         List<FieldInfo> sourceFieldInfo = Wires.fieldInfos(parentBuilder.getClass());
